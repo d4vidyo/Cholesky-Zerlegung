@@ -1,22 +1,23 @@
 import numpy as np
 
-def bmatrix(a):
+def toLaTeX(A):
     #Konvertiere zu LaTeX
-    lines = str(a)[1:-1].replace('[','').replace('\n','').split(']')
+    lines = str(A)[1:-1].replace('[','').replace('\n','').split(']')
     rv = [r'\begin{bmatrix}']
     rv += ['  ' + ' & '.join(l.split()) + r'\\' for l in lines]
     rv +=  [r'\end{bmatrix}']
     return '\n'.join(rv)
 
 class Band:
-    def __init__(self, Matrix, m, symetrie = "symetrisch"):
-        n = len(Matrix)
+    def __init__(self, A, m, symetrie = "symetrisch"):
+        n = len(A)
         self.m = m
         self.symetrie = symetrie
 
-        self.Bmatrix = np.zeros((m+1, n), dtype = Matrix.dtype)
+        self.Bmatrix = np.zeros((m+1, n), dtype = A.dtype)
         for i in range(0, m+1):
-            self.Bmatrix[i][i:n] = np.diagonal(Matrix, i)
+            self.Bmatrix[i][i:n] = np.diagonal(A, i)
+            
 
     def getElem(self, zeile, spalte):
         if self.symetrie == "symetrisch":
@@ -35,149 +36,76 @@ class Band:
         index = spalte - zeile
         if index > self.m: return
         self.Bmatrix[index][spalte] = value
-
-    def getZeile(self, index):
-        if index < 0: return np.zeros(n, dtype = self.Bmatrix.dtype)
+        
+    def ausschreiben(self):
         n = len(self.Bmatrix[0])
-        p = np.zeros(n, dtype = self.Bmatrix.dtype)
-        if self.symetrie == "symetrisch":
-            p[index:index+self.m+1] = np.diagonal(self.Bmatrix, index)
-            for i in range(index-1,min(0,index-1-self.m),-1):
-                p[i] = self.getElem(index, i)
-            return p
-        elif self.symetrie == "unteresDreieck":
-            for i in range(index-1,min(0,index-1-self.m),-1):
-                p[i] = self.getElem(index, i)
-            return p
-
-
-    def setZeile(self, index, value):
-        if index < 0: return
-        n = len(self.Bmatrix[0])
+        A = np.zeros((n,n), dtype = self.Bmatrix.dtype)
         for i in range(0, n):
-            self.setElem(index, i, value[i])
-    
-    def getSpalte(self, index):
-        return self.getZeile(index)
+            for j in range(0, n):
+                A[i][j] = self.getElem(i,j)
+        return A
 
-    def setSpalte(self, index, value):
-        self.setZeile(index, value)
+    def erzeugeZufaellige(n = None):
+        n = n if n else np.random.randint(low = 8, high = 16)
+        m = np.random.randint(low = 1, high = n-1)
+
+        Rand = np.zeros((n,n))
+        randDiag = np.random.random(n) * 10
+        Rand += np.diag(randDiag, k=0)
+        for i in range(1,m+1):
+            randDiag = np.random.random(n-i) - 0.5 * np.ones(n-i)
+            Rand += np.diag(randDiag,k=i)
+            
+        A = Rand.T.dot(Rand)
+
+        if not np.all(np.linalg.eigvalsh(A)>0): return Band.erzeugeZufaellige()
+        
+        return Band(A, m)
+
 
     def __str__(self):
         return str(self.Bmatrix)
 
     def __getattr__(self, attr):
         return getattr(self.Bmatrix, attr)
-
-
-
-def getElem(M, zeile, spalte):
-    if zeile > spalte: return getElem(M, spalte, zeile)
-    m = len(M)-1
-    index = spalte - zeile
-    if index > m: return 0
-    return M[index][spalte]
-
-def setElem(M, zeile, spalte, value):
-    if zeile > spalte: return setElem(M, spalte, zeile, value)
-    m = len(M)-1
-    index = spalte - zeile
-    if index > m: return 0
-    M[index][spalte] = value
-
-"""
-def getZeile(M, index):
-    if index < 0: return np.zeros(n, dtype = M.dtype)
-    n = len(M[0])
-    m = len(M)-1
-    p = np.zeros(n, dtype = M.dtype)
-    p[index:index+m+1] = np.diagonal(M, index)
-    for i in range(index-1,min(0,index-1-m),-1):
-        p[i] = getElem(M, index, i)
-    return p
-
-
-def setZeile(M, index, value):
-    if index < 0: return
-    n = len(M[0])
-    m = len(M)-1
-    for i in range(0, n):
-        setElem(M, index, i, value[i])
     
-def getSpalte(M, index):
-    return getZeile(M, index)
-
-def setSpalte(M, index, value):
-    return setZeile(M, index, value)
-"""
-
-def cholesky(A, **options):
-    typ = options.get('dtype') or np.float64
-    n = len(A)
-    L = np.zeros((n,n), dtype = typ)
-    for i in range(0,n):
-        Sum = typ(0)
-        for k in range(0,i):
-            Sum += np.square(L[i][k])            
-        L[i][i] = np.sqrt(A[i][i] - Sum)        
-
-        for j in range(i+1, n):
-            Sum = typ(0)
-            for k in range(0, i):
-                Sum += L[j][k] * L[i][k]
-            L[j][i] = (A[j][i] - Sum) / L[i][i]
-            
-    return L
 
 def choleskyComp(A, m, **options):
     typ = options.get('dtype') or np.float64
     n = len(A.Bmatrix[0])
-    X = Band(np.zeros((n,n), dtype = typ), m , "unteresDreieck")
-    L = np.zeros((n,n), dtype = typ)
+    L = Band(np.zeros((n,n), dtype = typ), m , "unteresDreieck")
     for i in range(0,n):
         Sum = typ(0)
-        Sum2 = typ(0)
-        for k in range(0,i):
-            Sum += np.square(L[i][k])            
-            Sum2 += np.square(X.getElem(i, k))            
-        L[i][i] = np.sqrt(A.getElem(i, i) - Sum)
-        X.setElem(i, i, np.sqrt(A.getElem(i, i) - Sum2))        
+        for k in range(0,i):       
+            Sum += np.square(L.getElem(i, k))      
+        L.setElem(i, i, np.sqrt(A.getElem(i, i) - Sum))        
 
         for j in range(i+1, n):
             Sum = typ(0)
-            Sum2 = typ(0)
             for k in range(0, i):
-                Sum += L[j][k] * L[i][k]
-                Sum2 += X.getElem(j, k) * X.getElem(i, k)
-            L[j][i] = (A.getElem(j, i) - Sum) / L[i][i]
-            X.setElem(j, i, (A.getElem(j, i) - Sum2) / X.getElem(i, i))
-            
-    L2 = np.zeros((n,n), dtype = typ)
-    for i in range(0,n):
-        for j in range(0,n):
-            L2[i][j] = X.getElem(i,j)
-            
+                Sum += L.getElem(j, k) * L.getElem(i, k)
+            L.setElem(j, i, (A.getElem(j, i) - Sum) / L.getElem(i, i))
 
-    print("Zerlegung compakt:")
-    print(np.round(X))
-    print("")
-    print("Zerlegung entpackt:")
-    print(np.round(L2))
-    print("")
-    print("Zerlegung normal:")
-    print(np.round(L))
-    print(np.all(L==L2))
     return L
 
 def main():
-    typ = np.float64    
-    
-    #A = np.array([
-    #    [4,2,4,4],
-    #    [2,10,5,2],
-    #    [4,5,9,6],
-    #    [4,2,6,9]
-    #    ], dtype=typ)
+    typ = np.float64
+    epsilon = 0.0001
+
+    zufallstest = True
+    for i in range(0,999):
+        A = Band.erzeugeZufaellige()
+        L = choleskyComp(A, A.m)
+
+        L_lang = L.ausschreiben()        
+        Rekonstruiert = L_lang.dot(L_lang.T)
+        A_lang = A.ausschreiben()
+        if not np.all(A_lang - Rekonstruiert < epsilon):
+            zufallstest = False
+            break
+
+    print("Zufallstest: ", zufallstest)
+
 
     B = np.array([
         [4,-1,0,0],
@@ -196,44 +124,17 @@ def main():
 
     m = 4
     n = len(A)
-    print("Matrix normal:")
-    print(A)
-    print("")
-
-
-    X = np.zeros((m+1,n),dtype=typ)
-    for i in range(0, m+1):
-        X[i][i:n]=np.diagonal(A, i)
-    X = Band(A, m)
-    print("Matrix compakt:")
-    print(X)
-    print("")
     
-    L = cholesky(A, dtype = typ)
-    Lcomp = choleskyComp(X, m, dtype = typ)
-    print(np.all(L==Lcomp))
-    #print(bmatrix(np.round(L,1)) + "\\\\")
-    #print(bmatrix(np.round(L2,1)))
+    A_kompakt = Band(A, m)
 
-    #print(bmatrix(np.round(L, 1)) + "\\\\")
-    #print(bmatrix(np.round(Lcomp, 1)))
-    #print(np.all(L == Lcomp))
-    #print(np.round(L, 0))
-    #print(np.round(L.dot(L.T),2))
-    #print("")
-    #print(np.all(abs(L.dot(L.T) - A) < 0.00001))
-    #print(bmatrix(A))
+    L = choleskyComp(A_kompakt, m, dtype = typ)
+    
+    L_lang = L.ausschreiben()
+    Rekonstruiert = L_lang.dot(L_lang.T)
+    print("Vorlesungsbeispiel Test: ", np.all(A - Rekonstruiert < epsilon))#
+    print("L=" + toLaTeX(np.round(L,1)) + "\\\\")
+    print("L_{lang}="+toLaTeX(np.round(L_lang,1)))
+
 
 if __name__ == "__main__":
-    typ = np.float64    
-    off_diag = [1, 2, 3]
-    B = np.array([
-        [4,-1,0,0],
-        [-1,4,4,0],
-        [0,-1,4,-1],
-        [0,0,-1,4]
-    ], dtype = typ)
-    target_diag = B.diagonal(1)
-    res_diag = off_diag - target_diag 
-    B += np.diag(res_diag, k=1)
     main()    
